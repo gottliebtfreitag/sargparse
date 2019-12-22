@@ -1,4 +1,5 @@
 #include "ArgumentParsing.h"
+#include <algorithm>
 
 namespace sargp
 {
@@ -211,11 +212,10 @@ std::string generateGroffString() {
 std::set<std::string> getNextArgHint(int argc, char const* const* argv) {
     auto const& cmds = detail::CommandRegistry::getInstance().getCommands();
 	std::vector<Command*> argProviders;
-	std::for_each(begin(cmds), end(cmds), [&](auto const& a) { argProviders.emplace_back(&a.second); });
 	std::string lastArgName;
 	std::vector<std::string> lastArguments;
 	tokenize(argc, argv, [&](std::string const& commandName){
-		auto target = detail::CommandRegistry::getInstance().getCommands().equal_range(commandName);
+		auto target = cmds.equal_range(commandName);
 		for (auto t{target.first}; t != target.second; ++t) {
 			argProviders.push_back(&t->second);
 			t->second.setActive(true);
@@ -237,12 +237,16 @@ std::set<std::string> getNextArgHint(int argc, char const* const* argv) {
 	});
 	std::set<std::string> hints;
 
-	if (lastArgName.empty() and argProviders.size() != 1) {
+	if (lastArgName.empty() and argProviders.empty()) {
 		auto const& commands = detail::CommandRegistry::getInstance().getCommands();
 		for (auto it = commands.begin(); it != commands.end(); it = commands.upper_bound(it->first)) {
 			hints.emplace(it->first);
 		}
 	}
+
+    // from here on the default commands are argProviders
+    auto defaultCommands = cmds.equal_range("");
+	std::for_each(defaultCommands.first, defaultCommands.second, [&](auto const& a) { argProviders.emplace_back(&a.second); });
 
 	bool canAcceptNextArg = true;
 	for (auto argProvider : argProviders) {
