@@ -5,6 +5,13 @@
 namespace sargp
 {
 
+TaskBase::TaskBase(Command& c) : _command{c} {
+    _command.registerTask(*this);
+}
+TaskBase::~TaskBase() {
+    _command.deregisterTask(*this);
+}
+
 ParameterBase::ParameterBase(std::string const& argName, DescribeFunc const& describeFunc, Callback cb, ValueHintFunc const& hintFunc, Command& command)
 	: _argName(argName)
 	, _describeFunc(describeFunc)
@@ -12,12 +19,21 @@ ParameterBase::ParameterBase(std::string const& argName, DescribeFunc const& des
 	, _hintFunc(hintFunc)
 	, _command(command)
 {
-	_command.registerParameter(_argName, *this);
+	_command.registerParameter(*this);
 }
 
 ParameterBase::~ParameterBase() {
-	_command.deregisterParameter(_argName, *this);
+	_command.deregisterParameter(*this);
 }
+
+
+Command& Command::getDefaultCommand() {
+    static Command instance{Command::DefaultCommand{}};
+    return instance;
+}
+
+Command::Command(DefaultCommand)
+{}
 
 Command& getDefaultCommand() {
 	return Command::getDefaultCommand();

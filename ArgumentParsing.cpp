@@ -7,6 +7,21 @@ namespace sargp
 namespace
 {
 
+std::vector<Command*> getActiveCommands() {
+    std::vector<Command*> activeCommands = {&Command::getDefaultCommand()};
+    while (true) {
+        auto& subC = activeCommands.back()->getSubCommands();
+        auto it = std::find_if(begin(subC), end(subC), [](Command const* p){
+            return static_cast<bool>(*p);
+        });
+        if (it == subC.end()) {
+            break;
+        }
+        activeCommands.emplace_back(*it);
+    }
+    return activeCommands;
+}
+
 bool isArgName(std::string const& str) {
 	return str.find("--", 0) == 0;
 }
@@ -41,54 +56,47 @@ void tokenize(int argc, char const* const* argv, CommandCallback&& commandCB, Pa
 }
 
 void parseArguments(int argc, char const* const* argv) {
-	auto const& commands = Command::Registry::getInstance().getCommands();
-	std::vector<Command*> argProviders;
-	auto range = commands.equal_range("");
-	for (auto command = range.first; command != range.second; ++command) {
-		argProviders.emplace_back(&command->second);
-	}
-	tokenize(argc, argv, [&](std::string const& commandName){
-		auto target = detail::CommandRegistry::getInstance().getCommands().equal_range(commandName);
-		if (target.first == target.second) {
+	std::vector<Command*> argProviders = {&Command::getDefaultCommand()};
+
+    auto commandCB = [&](std::string const& commandName) {
+        auto const& subC = argProviders.back()->getSubCommands();
+		auto target = std::find_if(begin(subC), end(subC), [&](Command const* cmd){
+            return cmd->getName() == commandName;
+        });
+		if (target == subC.end()) {
 			throw std::invalid_argument("command " + commandName + " is not implemented");
 		}
-		for (auto t{target.first}; t != target.second; ++t) {
-			t->second.setActive(true);
-			argProviders.push_back(&t->second);
-		}
-	}, [&](std::string const& argName, std::vector<std::string> const& arguments) {
+        argProviders.push_back(*target);
+	};
+
+    auto paramCB = [&](std::string const& argName, std::vector<std::string> const& arguments) {
 		bool found = false;
 		for (auto argProvider : argProviders) {
-			auto target = argProvider->getParameters().equal_range(argName);
-			if (target.first == target.second) {
+            auto& params = argProvider->getParameters();
+			auto target = std::find_if(begin(params), end(params), [&](ParameterBase const* p){
+                return p->getArgName() == argName;
+            });
+			if (target == params.end()) {
 				continue;
 			}
 			found = true;
-			for (auto t{target.first}; t != target.second; ++t) {
-				try {
-					t->second.parse(arguments);
-				} catch (sargp::parsing::detail::ParseError const& error) {
-					throw std::invalid_argument("cannot parse arguments for \"" + argName + "\" - " + error.what());
-				}
-			}
+            try {
+                (*target)->parse(arguments);
+                (*target)->parsed();
+            } catch (sargp::parsing::detail::ParseError const& error) {
+                throw std::invalid_argument("cannot parse arguments for \"" + argName + "\" - " + error.what());
+            }
 		}
 		if (not found) {
 			throw std::invalid_argument("argument " + argName + " is not implemented");
 		}
-	});
+	};
 
-	// if no commands are active activate all default commands
-	bool anyCommandActive = std::find_if(commands.begin(), commands.end(), [](std::pair<std::string, Command&> const& c) -> bool {return c.second;}) != commands.end();
-	if (not anyCommandActive) {
-		std::for_each(commands.begin(), commands.end(), [](std::pair<std::string, Command&> const& c) {
-			if (c.first == "") {
-				c.second.setActive(true);
-			}
-		});
-	}
+	tokenize(argc, argv, commandCB, paramCB);
+    std::for_each(begin(argProviders), end(argProviders), [](auto* c) {c->setActive(true);});
 }
 
-void parseArguments(int argc, char const* const* argv, std::set<ParameterBase*> const& targetParameters) {
+void parseArguments(int argc, char const* const* argv, std::vector<ParameterBase*> const& targetParameters) {
 	tokenize(argc, argv, [](std::string const&){}, [&](std::string const& argName, std::vector<std::string> const& arguments)
 	{
 		auto target = std::find_if(targetParameters.begin(), targetParameters.end(), [&](ParameterBase*p){ return p->getArgName() == argName; });
@@ -106,163 +114,171 @@ void parseArguments(int argc, char const* const* argv, std::set<ParameterBase*> 
 std::string generateHelpString(std::regex const& filter) {
 	std::string helpString;
 
-	auto const & commands = detail::CommandRegistry::getInstance().getCommands();
-	std::set<std::string> commandNames;
-	std::for_each(begin(commands), end(commands), [&](auto const& i) { commandNames.emplace(i.first); });
-	if (commandNames.size() != 1) { // if there is more than just the default command
-		helpString += "valid commands:\n\n";
-		int maxCommandStrLen = std::max_element(begin(commandNames), end(commandNames), [](auto const& a, auto const& b) {return a.size() < b.size(); })->size();
-        maxCommandStrLen = std::max(2, maxCommandStrLen); // the default command is marked with () so we need at least two characters
+	auto active_commands = getActiveCommands();
+
+    auto const& subCommands = active_commands.back()->getSubCommands();
+	if (not subCommands.empty()) { // if there is at least one subcommand
+		helpString += "valid subcommands:\n\n";
+		int maxCommandStrLen = (*std::max_element(begin(subCommands), end(subCommands), 
+            [](Command const* a, Command const* b) {
+                return a->getName().size() < b->getName().size(); 
+            }))->getName().size();
 		maxCommandStrLen += 2;// +2 cause we print two spaces at the beginning
         helpString += "  ()"  + std::string(maxCommandStrLen - 1, ' ') + "the default command\n";
-		for (auto it = commands.begin(); it != commands.end(); it = commands.upper_bound(it->first)) {
-			if (&it->second != &Command::getDefaultCommand()) {
-                std::string commandName = it->first.empty() ? "()" : it->first;
-				helpString += "  " + commandName + std::string(maxCommandStrLen - commandName.size()+1, ' ') + it->second.getDescription() + "\n";
-			}
+		for (auto const& subC : subCommands) {
+            std::string name = subC->getName();
+            helpString += "  " + name + std::string(maxCommandStrLen - name.size()+1, ' ') + subC->getDescription() + "\n";
 		}
 		helpString += "\n";
 	}
-	for (auto it = commands.begin(); it != commands.end();) {
+    auto helpStrForCommand = [&](Command const* command) {
+        std::string helpString;
 		int maxArgNameLen = 0;
 		bool anyMatch = false;
-		auto end = commands.upper_bound(it->first);
-		for (auto command = it; command != end; ++command) {
-			auto const& params = command->second.getParameters();
-			for (auto paramIt = params.begin(); paramIt != params.end(); paramIt = params.upper_bound(paramIt->first)) {
-				if (std::regex_match(paramIt->second.getArgName(), filter)) {
-					anyMatch = true;
-					maxArgNameLen = std::max(maxArgNameLen, static_cast<int>(paramIt->second.getArgName().size()));
-				}
-			}
-		}
+        for (auto const& param : command->getParameters()) {
+            if (std::regex_match(param->getArgName(), filter)) {
+                anyMatch = true;
+                maxArgNameLen = std::max(maxArgNameLen, static_cast<int>(param->getArgName().size()));
+            }
+        }
 		if (anyMatch) {
 			maxArgNameLen += 4;
-			if (it->first == "") {
+			if (command->getName().empty()) {
 				helpString += "\nglobal parameters:\n\n";
 			} else {
-				helpString += "\nparameters for command " + it->first + ":\n\n";
+				helpString += "\nparameters for command " + command->getName() + ":\n\n";
 			}
-			for (auto command = it; command != end; ++command) {
-				auto const& params = command->second.getParameters();
-				for (auto paramIt = params.begin(); paramIt != params.end(); paramIt = params.upper_bound(paramIt->first)) {
-					if (std::regex_match(paramIt->second.getArgName(), filter)) {
-						ParameterBase& pb = paramIt->second;
-						helpString += "--" + pb.getArgName() + std::string(maxArgNameLen - paramIt->first.size(), ' ');
-						if (not pb) {// the difference are the brackets!
-							helpString += "(" + pb.stringifyValue() + ")";
-						} else {
-							helpString += pb.stringifyValue();
-						}
-						helpString += "\n    " + pb.describe() + "\n";
-					}
-				}
-			}
+
+            for (auto const& param : command->getParameters()) {
+                std::string const& name = param->getArgName();
+                if (std::regex_match(param->getArgName(), filter)) {
+                    helpString += "--" + name + std::string(maxArgNameLen - name.size(), ' ');
+                    if (not *param) {// the difference are the brackets!
+                        helpString += "(" + param->stringifyValue() + ")";
+                    } else {
+                        helpString += param->stringifyValue();
+                    }
+                    helpString += "\n    " + param->describe() + "\n";
+                }
+            }
 		}
-		it = end;
+        return helpString;
+    };
+    for (Command* command : active_commands) {
+        helpString += helpStrForCommand(command);
 	}
+    for (Command* command : active_commands.back()->getSubCommands()) {
+        helpString += helpStrForCommand(command);
+	}
+
 	return helpString;
 }
 
-std::string generateGroffString() {
-	std::string helpString;
-
-	auto const & commands = detail::CommandRegistry::getInstance().getCommands();
-
-	if (commands.size() != 1) { // if there is more than just the default command
-
-		helpString += ".SH COMMANDS\n";
-
-		for (auto it = commands.begin(); it != commands.end(); it = commands.upper_bound(it->first)) {
-			if (&it->second != &Command::getDefaultCommand()) {
-				helpString += ".TP\n\\fB" + it->first + "\\fR\n" + it->second.getDescription() + "\n";
-			}
+std::string generateGroffString(std::string const& program_name, std::string const& description, Command const& command) {
+	std::string groff = R"(
+.TH man 1
+.SH NAME
+ )" + program_name + R"(
+.SH SYNOPSIS
+ )" + program_name + R"( [subcommands] [arguments]
+.SH DESCRIPTION
+ )" + description + R"(
+)";
+	auto const & subCommands = command.getSubCommands();
+	if (not subCommands.empty()) { // if there is at least one subcommand
+		groff += ".SH SUB COMMANDS\n";
+		for (auto const& subC : subCommands) {
+            groff += ".TP\n\\fB" + subC->getName() + "\\fR\n" + subC->getDescription() + "\n";
 		}
-		helpString += "\n";
+		groff += "\n";
 	}
-	bool lastLocal{false};
-	for (auto it = commands.begin(); it != commands.end();) {
-		bool globalOptions = &it->second == &Command::getDefaultCommand();
-		if (globalOptions) {
-			helpString += ".SH GLOBAL OPTIONS\n";
-		}
-		if (not lastLocal and not globalOptions) {
-			lastLocal = true;
-			helpString += ".SH SPECIFIC OPTIONS\n";
-		}
 
-		auto end = commands.upper_bound(it->first);
-		for (auto command = it; command != end; ++command) {
-			if (not globalOptions) {
-				helpString += ".SS\n\\fB" + it->first + "\\fR\n";
-			}
+    groff += ".SH GLOBAL OPTIONS\n";
+    Command const* parent = &command;
+    while (parent) {
+        for (ParameterBase const* param : parent->getParameters()) {
+            groff += ".TP\n";
+            groff += "\\fR--" + param->getArgName() + "\\fR\n";
+            groff += param->describe() + "\n";
+        }
+        parent = parent->getParentCommand();
+    }
+    groff += ".SH COMMAND SPECIFIC OPTIONS\n";
 
-			auto const& params = command->second.getParameters();
-			for (auto paramIt = params.begin(); paramIt != params.end(); paramIt = params.upper_bound(paramIt->first)) {
-				helpString += ".TP\n";
-				helpString += std::string{"\\fB--"} + paramIt->second.getArgName() + "\\fR\n";
-				helpString += paramIt->second.describe() + "\n";
-			}
-		}
-		it = end;
+    for (auto const& subC : subCommands) {
+        groff += ".SS\n\\fB" + subC->getName() + "\\fR\n";
+        for (ParameterBase const* param : subC->getParameters()) {
+            groff += ".TP\n";
+            groff += std::string{"\\fR--"} + param->getArgName() + "\\fR\n";
+            groff += param->describe() + "\n";
+        }
 	}
-	return helpString;
+	return groff;
 }
 
 std::set<std::string> getNextArgHint(int argc, char const* const* argv) {
-    auto const& cmds = detail::CommandRegistry::getInstance().getCommands();
-	std::vector<Command*> argProviders;
+	std::vector<Command*> argProviders = {&Command::getDefaultCommand()};
 	std::string lastArgName;
 	std::vector<std::string> lastArguments;
-	tokenize(argc, argv, [&](std::string const& commandName){
-		auto target = cmds.equal_range(commandName);
-		for (auto t{target.first}; t != target.second; ++t) {
-			argProviders.push_back(&t->second);
-			t->second.setActive(true);
+
+    auto commandCB = [&](std::string const& commandName) {
+        auto const& subC = argProviders.back()->getSubCommands();
+		auto target = std::find_if(begin(subC), end(subC), [&](Command const* cmd){
+            return cmd->getName() == commandName;
+        });
+		if (target != subC.end()) {
+            argProviders.push_back(*target);
 		}
-	}, [&](std::string const& argName, std::vector<std::string> const& arguments) {
+	};
+
+    auto paramCB = [&](std::string const& argName, std::vector<std::string> const& arguments) {
+        lastArgName = argName;
+        lastArguments = arguments;
 		for (auto argProvider : argProviders) {
-			auto target = argProvider->getParameters().equal_range(argName);
-			if (target.first == target.second) {
+            auto& params = argProvider->getParameters();
+			auto target = std::find_if(begin(params), end(params), [&](ParameterBase const* p){
+                return p->getArgName() == argName;
+            });
+			if (target == params.end()) {
 				continue;
 			}
-			for (auto t{target.first}; t != target.second; ++t) {
-				try {
-					t->second.parse(arguments);
-				} catch (std::invalid_argument const& error) {}
-			}
-			lastArgName = argName;
-			lastArguments = arguments;
+            try {
+                (*target)->parse(arguments);
+            } catch (sargp::parsing::detail::ParseError const& error) {
+            }
 		}
-	});
-	std::set<std::string> hints;
+	};
 
-	if (lastArgName.empty() and argProviders.empty()) {
-		auto const& commands = detail::CommandRegistry::getInstance().getCommands();
-		for (auto it = commands.begin(); it != commands.end(); it = commands.upper_bound(it->first)) {
-			hints.emplace(it->first);
+	tokenize(argc, argv, commandCB, paramCB);
+    std::for_each(begin(argProviders), end(argProviders), [](auto* c) {c->setActive(true);});
+
+	std::set<std::string> hints;
+	if (lastArgName.empty()) {
+        auto const& subC = argProviders.back()->getSubCommands();
+		for (Command const* c : subC) {
+			hints.emplace(c->getName());
 		}
 	}
 
-    // from here on the default commands are argProviders
-    auto defaultCommands = cmds.equal_range("");
-	std::for_each(defaultCommands.first, defaultCommands.second, [&](auto const& a) { argProviders.emplace_back(&a.second); });
-
 	bool canAcceptNextArg = true;
 	for (auto argProvider : argProviders) {
-		auto target = argProvider->getParameters().equal_range(lastArgName);
-		for (auto t{target.first}; t != target.second; ++t) {
-			auto [cur_canAcceptNextArg, cur_hints] = t->second.getValueHints(lastArguments);
-			canAcceptNextArg &= cur_canAcceptNextArg;
-			hints.insert(cur_hints.begin(), cur_hints.end());
-		}
+        auto const& params = argProvider->getParameters();
+        auto target = std::find_if(begin(params), end(params), [&](ParameterBase const* p) {
+            return p->getArgName() == lastArgName;
+        });
+        if (target == params.end()) {
+            continue;
+        }
+        auto [cur_canAcceptNextArg, cur_hints] = (*target)->getValueHints(lastArguments);
+        canAcceptNextArg &= cur_canAcceptNextArg;
+        hints.insert(cur_hints.begin(), cur_hints.end());
 	}
 
 	if (canAcceptNextArg) {
 		for (auto argProvider : argProviders) {
-			for (auto const& p : argProvider->getParameters()) {
-				if (not p.second) {
-					hints.insert("--" + p.first);
+			for (auto const* p : argProvider->getParameters()) {
+				if (not *p) {
+					hints.insert("--" + p->getArgName());
 				}
 			}
 		}
@@ -271,16 +287,9 @@ std::set<std::string> getNextArgHint(int argc, char const* const* argv) {
 }
 
 void callCommands() {
-	auto const& commands = detail::CommandRegistry::getInstance().getCommands();
-	// collect all nondefault commands that can be run
-	std::set<Command*> runnableCommands;
-	for (auto& command : commands) {
-        if (command.second) {
-            runnableCommands.emplace(&command.second);
-        }
-	}
-	for (auto cmd : runnableCommands) {
-		cmd->callCB();
+	auto const& commands = getActiveCommands();
+	for (Command* cmd : commands) {
+		cmd->callCBs();
 	}
 }
 

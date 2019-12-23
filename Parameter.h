@@ -7,97 +7,13 @@
 #include <functional>
 #include <numeric>
 #include <initializer_list>
-#include <typeindex>
+#include <algorithm>
 #include <memory>
 
 #include "ParameterParsing.h"
 
-
 namespace sargp
 {
-
-struct Command;
-
-namespace detail
-{
-
-
-template<typename T>
-struct Singleton {
-	static T& getInstance() {
-		static T instance;
-		return instance;
-	}
-protected:
-	Singleton() = default;
-	~Singleton() = default;
-};
-
-
-struct Storage {
-    virtual ~Storage() = default;
-
-// protected:
-//     Storage() = default;
-};
-
-// this holds all values of parameters
-template<typename T>
-struct TypedStorage : Storage {
-	using StorageT = std::map<std::string, T>;
-	StorageT storage;
-
-    virtual ~TypedStorage() = default;
-};
-
-struct StorageManager {
-private:
-    std::map<std::type_index, std::unique_ptr<Storage>> storages;
-public:
-    StorageManager() = default;
-
-    template<typename T>
-    TypedStorage<T>& getStorage() {
-        std::type_index index{typeid(T)};
-        auto it = storages.find(index);
-        if (it == storages.end()) {
-            it = storages.emplace(index, std::make_unique<TypedStorage<T>>()).first;
-        }
-        return static_cast<TypedStorage<T>&>(*it->second);
-    }
-
-    template<typename T>
-    T& getValue(std::string const& name, T const& defaultVal) {
-        auto& storage = getStorage<T>();
-        return storage.storage.emplace(name, defaultVal).first->second;
-    }
-};
-
-struct CommandRegistry : Singleton<CommandRegistry> {
-private:
-	std::multimap<std::string, Command&> _commands;
-
-public:
-	void registerCommand(std::string const& name, Command& command) {
-		_commands.emplace(name, command);
-	}
-	void deregisterCommand(std::string const& name, Command& command) {
-		auto range = _commands.equal_range(name);
-		for (auto it=range.first; it != range.second;) {
-			if (&it->second == &command) {
-				it = _commands.erase(it);
-			} else {
-				++it;
-			}
-		}
-	}
-
-	auto getCommands() const -> decltype(_commands) const& {
-		return _commands;
-	}
-};
-
-}
 
 struct Command;
 Command& getDefaultCommand();
@@ -113,12 +29,7 @@ struct ParameterBase {
 	using ValueHintFunc = std::function<std::pair<bool, std::set<std::string>>(std::vector<std::string> const&)>;
 	virtual ~ParameterBase();
 
-	virtual void parse([[maybe_unused]] std::vector<std::string> const&  args) {
-		_valSpecified = true;
-		if (_cb) {
-			_cb();
-		}
-	};
+	virtual void parse([[maybe_unused]] std::vector<std::string> const&  args) = 0;
 	virtual std::string stringifyValue() const = 0;
 
 	virtual std::string describe() const {
@@ -142,6 +53,13 @@ struct ParameterBase {
 	 */
 	operator bool() const { return _valSpecified; };
 
+    // called after a successful parse
+    void parsed() {
+		_valSpecified = true;
+		if (_cb) {
+			_cb();
+		}
+    }
 protected:
 	ParameterBase(std::string const& argName, DescribeFunc const& describeFunc, Callback cb, ValueHintFunc const& hintFunc, Command& command);
 
@@ -159,12 +77,16 @@ protected:
 	using SuperClass = ParameterBase;
 	using value_type = T;
 
-	value_type& _val;
+	value_type _val;
 public:
 	TypedParameter(T const& defaultVal, std::string const& argName, std::string const& description, Callback cb=Callback{}, ValueHintFunc hintFunc=ValueHintFunc{}, Command& command=getDefaultCommand())
 	: TypedParameter(defaultVal, argName, [=]{return description;}, cb, hintFunc, command)
 	{}
 	TypedParameter(T const& defaultVal, std::string const& argName, DescribeFunc const& description, Callback cb=Callback{}, ValueHintFunc hintFunc=ValueHintFunc{}, Command& command=getDefaultCommand());
+
+	void parse(std::vector<std::string> const& args) override {
+		_val = parsing::parse<T>(args);
+	}
 
 	T& operator *() {
 		return _val;
@@ -191,14 +113,7 @@ public:
 // an intermediate type broker to inject type specific specializations eg. for rendering
 template<typename T>
 struct SpeciallyTypedParameter : TypedParameter<T> {
-	using value_type = T;
-	using SuperClass = TypedParameter<T>;
-	using SuperClass::SuperClass;
-
-	void parse(std::vector<std::string> const& args) override {
-		SuperClass::_val = parsing::parse<T>(args);
-		SuperClass::parse(args);
-	}
+    using TypedParameter<T>::TypedParameter;
 };
 
 template<>
@@ -206,11 +121,6 @@ struct SpeciallyTypedParameter<bool> : TypedParameter<bool> {
 	using SuperClass = TypedParameter<bool>;
 	using value_type = SuperClass::value_type;
 	using SuperClass::SuperClass;
-
-	void parse(std::vector<std::string> const& args) override {
-		SuperClass::_val = parsing::parse<value_type>(args);
-		SuperClass::parse(args);
-	}
 
 	auto getValueHints(std::vector<std::string> const& args) const -> std::pair<bool, std::set<std::string>> override {
 		if (SuperClass::_hintFunc) {
@@ -229,11 +139,6 @@ struct SpeciallyTypedParameter<std::optional<T>> : TypedParameter<std::optional<
 	using value_type = typename SuperClass::value_type;
 	using SuperClass::SuperClass;
 
-	void parse(std::vector<std::string> const& args) override {
-		SuperClass::_val = parsing::parse<value_type>(args);
-		SuperClass::parse(args);
-	}
-
 	auto getValueHints(std::vector<std::string> const& args) const -> std::pair<bool, std::set<std::string>> override {
 		if (SuperClass::_hintFunc) {
 			return SuperClass::_hintFunc(args);
@@ -248,11 +153,6 @@ struct SpeciallyTypedParameter<std::vector<T>> : TypedParameter<std::vector<T>> 
 	using value_type = typename SuperClass::value_type;
 	using SuperClass::SuperClass;
 
-	void parse(std::vector<std::string> const& args) override {
-		SuperClass::_val = parsing::parse<value_type>(args);
-		SuperClass::parse(args);
-	}
-
 	auto getValueHints(std::vector<std::string> const& args) const -> std::pair<bool, std::set<std::string>> override {
 		if (SuperClass::_hintFunc) {
 			return SuperClass::_hintFunc(args);
@@ -265,11 +165,6 @@ struct SpeciallyTypedParameter<std::set<T>> : TypedParameter<std::set<T>> {
 	using SuperClass = TypedParameter<std::set<T>>;
 	using value_type = typename SuperClass::value_type;
 	using SuperClass::SuperClass;
-
-	void parse(std::vector<std::string> const& args) override {
-		SuperClass::_val = parsing::parse<value_type>(args);
-		SuperClass::parse(args);
-	}
 
 	auto getValueHints(std::vector<std::string> const& args) const -> std::pair<bool, std::set<std::string>> override {
 		if (SuperClass::_hintFunc) {
@@ -379,54 +274,82 @@ public:
 	}
 };
 
+struct TaskBase {
+    TaskBase(Command& c);
+    virtual ~TaskBase();
+    virtual void operator()() = 0;
+
+protected:
+    Command& _command;
+};
 
 struct Command {
-	using Registry      = detail::CommandRegistry;
-	using Callback      = ParameterBase::Callback;
 	using DescribeFunc  = ParameterBase::DescribeFunc;
 	using ValueHintFunc = ParameterBase::ValueHintFunc;
+	using Callback      = ParameterBase::Callback;
 
 private:
-	std::vector<std::string> _names;
-	std::string              _description;
-	Callback                 _cb;
-	bool                     _isActive {false};
-    detail::StorageManager   _storageManager;
+	std::string               _name;
+	std::string               _description;
+    std::unique_ptr<TaskBase> _defaultTask;
+	std::vector<TaskBase*>    _tasks;
+	bool                      _isActive {false};
 
-	std::multimap<std::string, ParameterBase&> parameters;
+	std::vector<ParameterBase*> parameters;
+	std::vector<Command*>       subcommands;
+    Command* _parentCommand {nullptr};
+
+    template<typename CB>
+    Command(Command* parentCommand, std::string const& name, std::string const& description, CB&& cb);
+
+    struct DefaultCommand {};
+    Command(DefaultCommand);
 public:
+	Command(std::string const& name, std::string const& description)
+        : Command{nullptr, name, description, []{}} {}
 
-	Command(std::string const& name, std::string const& description, Callback const& cb=Callback{}) :
-		Command({name}, description, cb) {}
-	Command(std::initializer_list<std::string> const& names, std::string const& description, Callback const& cb=Callback{}) : _names(names), _description(description), _cb(cb) {
-		for (auto const& _name : _names) {
-			Registry::getInstance().registerCommand(_name, *this);
-		}
-	}
+    template<typename CB>
+	Command(std::string const& name, std::string const& description, CB&& cb) 
+        : Command(nullptr, name, description, cb) {}
+    
 	~Command() {
-		for (auto const& _name : _names) {
-			Registry::getInstance().deregisterCommand(_name, *this);
-		}
+        if (not _parentCommand) {
+            return;
+        }
+        auto& pSubC = _parentCommand->subcommands;
+        pSubC.erase(std::remove(begin(pSubC), end(pSubC), this), end(pSubC));
 	}
+
+    auto getName() const -> decltype(_name) const& {
+        return _name;
+    }
 
 	auto getDescription() const -> decltype(_description) const& {
 		return _description;
 	}
+    auto getSubCommands() const -> decltype(subcommands) const& {
+        return subcommands;
+    }
+    auto getParentCommand() const -> decltype(_parentCommand) {
+        return _parentCommand;
+    }
 
-	void registerParameter(std::string const& name, ParameterBase& parameter) {
-		parameters.emplace(name, parameter);
+	void registerParameter(ParameterBase& parameter) {
+		parameters.emplace_back(&parameter);
 	}
-	void deregisterParameter(std::string const& name, ParameterBase& parameter) {
-		parameters.emplace(name, parameter);
+	void deregisterParameter(ParameterBase& parameter) {
+		parameters.erase(std::remove(begin(parameters), end(parameters), &parameter), end(parameters));
 	}
+
+	void registerTask(TaskBase& task) {
+		_tasks.emplace_back(&task);
+	}
+	void deregisterTask(TaskBase& task) {
+		_tasks.erase(std::remove(begin(_tasks), end(_tasks), &task), end(_tasks));
+	}
+
 	auto getParameters() const -> decltype(parameters) const& {
 		return parameters;
-	}
-	auto getStorageManager() -> decltype(_storageManager)& {
-		return _storageManager;
-	}
-	auto getStorageManager() const -> decltype(_storageManager) const& {
-		return _storageManager;
 	}
 
 	void setActive(bool active) {
@@ -437,28 +360,25 @@ public:
 		return _isActive;
 	}
 
-	void callCB() {
-		if (_cb) {
-			_cb();
+	void callCBs() {
+		for (auto task : _tasks) {
+			(*task)();
 		}
 	}
 
-	static Command& getDefaultCommand() {
-		static Command instance{"", ""};
-		return instance;
-	}
+	static Command& getDefaultCommand();
 
 	// parameters that are enabled if this Command is active
 	template<typename T>
-	[[nodiscard]] auto Parameter(T const& defaultVal, std::string const& argName, std::string const& description, Callback cb=Callback{}, ValueHintFunc hintFunc=ValueHintFunc{}) -> ::sargp::Parameter<T> {
+	[[nodiscard]] auto Parameter(T const& defaultVal, std::string const& argName, std::string const& description, Callback cb={}, ValueHintFunc hintFunc=ValueHintFunc{}) -> ::sargp::Parameter<T> {
 		return ::sargp::Parameter<T>{defaultVal, argName, description, cb, hintFunc, *this};
 	}
 	template<typename T>
-	[[nodiscard]] auto Parameter(T const& defaultVal, std::string const& argName, DescribeFunc const& description, Callback cb=Callback{}, ValueHintFunc hintFunc=ValueHintFunc{}) -> ::sargp::Parameter<T> {
+	[[nodiscard]] auto Parameter(T const& defaultVal, std::string const& argName, DescribeFunc const& description, Callback cb={}, ValueHintFunc hintFunc=ValueHintFunc{}) -> ::sargp::Parameter<T> {
 		return ::sargp::Parameter<T>{defaultVal, argName, description, cb, hintFunc, *this};
 	}
 
-	[[nodiscard]] auto Flag(std::string const& argName, std::string const& description, Callback cb=Callback{}) -> ::sargp::Flag {
+	[[nodiscard]] auto Flag(std::string const& argName, std::string const& description, Callback cb={}) -> ::sargp::Flag {
 		return ::sargp::Flag{argName, description, cb, *this};
 	}
 	template<typename T, typename... Args>
@@ -468,12 +388,42 @@ public:
 	[[nodiscard]] auto Section(std::string const& name) -> Section {
 		return ::sargp::Section(name);
 	}
+
+    template<typename CB>
+	[[nodiscard]] auto SubCommand(std::string const& name, std::string const& description, CB&& cb) -> Command {
+		return ::sargp::Command(this, name, description, std::forward<CB>(cb));
+	}
 };
+
+template<typename CB>
+struct Task : TaskBase {
+    Task(CB&& cb, Command& command = Command::getDefaultCommand()) 
+    : TaskBase{command}, _cb{std::forward<CB>(cb)} {}
+    virtual ~Task() = default;
+
+    void operator()() override {
+        return _cb();
+    }
+private:
+    CB _cb;
+};
+template<typename CB> Task(CB) -> Task<CB>;
+
+template<typename CB>
+Command::Command(Command* parentCommand, std::string const& name, std::string const& description, CB&& cb) 
+    : _name(name)
+    , _description(description)
+    , _defaultTask{std::make_unique<Task<CB>>(std::forward<CB>(cb), *this)}
+    , _tasks{{_defaultTask.get()}}
+    , _parentCommand{parentCommand?:&Command::getDefaultCommand()}
+{
+    _parentCommand->subcommands.emplace_back(this);
+}
 
 template<typename T>
 TypedParameter<T>::TypedParameter(T const& defaultVal, std::string const& argName, DescribeFunc const& description, Callback cb, ValueHintFunc hintFunc, Command& command)
 	: SuperClass(argName, description, cb, hintFunc, command)
-	, _val(command.getStorageManager().getValue(argName, defaultVal))
+	, _val{defaultVal}
 {}
 
 }
