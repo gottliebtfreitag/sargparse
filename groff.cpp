@@ -60,7 +60,7 @@ void printManPage() {
         }
     }
 
-    char tmp_file_name[] = "groff_tempfileXXXXXX";
+    char tmp_file_name[] = "/tmp/groff_tempfileXXXXXX";
     int fd = mkstemp(tmp_file_name);
     if (fd == -1) {
         throw std::runtime_error("cannot create tempfile" + std::string{std::strerror(errno)});
