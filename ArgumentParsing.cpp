@@ -7,21 +7,6 @@ namespace sargp
 namespace
 {
 
-std::vector<Command*> getActiveCommands() {
-    std::vector<Command*> activeCommands = {&Command::getDefaultCommand()};
-    while (true) {
-        auto& subC = activeCommands.back()->getSubCommands();
-        auto it = std::find_if(begin(subC), end(subC), [](Command const* p){
-            return static_cast<bool>(*p);
-        });
-        if (it == subC.end()) {
-            break;
-        }
-        activeCommands.emplace_back(*it);
-    }
-    return activeCommands;
-}
-
 bool isArgName(std::string const& str) {
 	return str.find("--", 0) == 0;
 }
@@ -55,6 +40,21 @@ void tokenize(int argc, char const* const* argv, CommandCallback&& commandCB, Pa
 
 }
 
+std::vector<Command*> getActiveCommands() {
+    std::vector<Command*> activeCommands = {&Command::getDefaultCommand()};
+    while (true) {
+        auto& subC = activeCommands.back()->getSubCommands();
+        auto it = std::find_if(begin(subC), end(subC), [](Command const* p){
+            return static_cast<bool>(*p);
+        });
+        if (it == subC.end()) {
+            break;
+        }
+        activeCommands.emplace_back(*it);
+    }
+    return activeCommands;
+}
+
 void parseArguments(int argc, char const* const* argv) {
 	std::vector<Command*> argProviders = {&Command::getDefaultCommand()};
 
@@ -66,6 +66,7 @@ void parseArguments(int argc, char const* const* argv) {
 		if (target == subC.end()) {
 			throw std::invalid_argument("command " + commandName + " is not implemented");
 		}
+        (*target)->setActive(true);
         argProviders.push_back(*target);
 	};
 
@@ -93,7 +94,6 @@ void parseArguments(int argc, char const* const* argv) {
 	};
 
 	tokenize(argc, argv, commandCB, paramCB);
-    std::for_each(begin(argProviders), end(argProviders), [](auto* c) {c->setActive(true);});
 }
 
 void parseArguments(int argc, char const* const* argv, std::vector<ParameterBase*> const& targetParameters) {
@@ -124,7 +124,6 @@ std::string generateHelpString(std::regex const& filter) {
                 return a->getName().size() < b->getName().size(); 
             }))->getName().size();
 		maxCommandStrLen += 2;// +2 cause we print two spaces at the beginning
-        helpString += "  ()"  + std::string(maxCommandStrLen - 1, ' ') + "the default command\n";
 		for (auto const& subC : subCommands) {
             std::string name = subC->getName();
             helpString += "  " + name + std::string(maxCommandStrLen - name.size()+1, ' ') + subC->getDescription() + "\n";
@@ -158,7 +157,11 @@ std::string generateHelpString(std::regex const& filter) {
                     } else {
                         helpString += param->stringifyValue();
                     }
-                    helpString += "\n    " + param->describe() + "\n";
+                    helpString += "\n";
+                    auto&& description = param->describe();
+                    if (not description.empty()) {
+                        helpString += "    " + description + "\n";
+                    }
                 }
             }
 		}
@@ -167,53 +170,8 @@ std::string generateHelpString(std::regex const& filter) {
     for (Command* command : active_commands) {
         helpString += helpStrForCommand(command);
 	}
-    for (Command* command : active_commands.back()->getSubCommands()) {
-        helpString += helpStrForCommand(command);
-	}
 
 	return helpString;
-}
-
-std::string generateGroffString(std::string const& program_name, std::string const& description, Command const& command) {
-	std::string groff = R"(
-.TH man 1
-.SH NAME
- )" + program_name + R"(
-.SH SYNOPSIS
- )" + program_name + R"( [subcommands] [arguments]
-.SH DESCRIPTION
- )" + description + R"(
-)";
-	auto const & subCommands = command.getSubCommands();
-	if (not subCommands.empty()) { // if there is at least one subcommand
-		groff += ".SH SUB COMMANDS\n";
-		for (auto const& subC : subCommands) {
-            groff += ".TP\n\\fB" + subC->getName() + "\\fR\n" + subC->getDescription() + "\n";
-		}
-		groff += "\n";
-	}
-
-    groff += ".SH GLOBAL OPTIONS\n";
-    Command const* parent = &command;
-    while (parent) {
-        for (ParameterBase const* param : parent->getParameters()) {
-            groff += ".TP\n";
-            groff += "\\fR--" + param->getArgName() + "\\fR\n";
-            groff += param->describe() + "\n";
-        }
-        parent = parent->getParentCommand();
-    }
-    groff += ".SH COMMAND SPECIFIC OPTIONS\n";
-
-    for (auto const& subC : subCommands) {
-        groff += ".SS\n\\fB" + subC->getName() + "\\fR\n";
-        for (ParameterBase const* param : subC->getParameters()) {
-            groff += ".TP\n";
-            groff += std::string{"\\fR--"} + param->getArgName() + "\\fR\n";
-            groff += param->describe() + "\n";
-        }
-	}
-	return groff;
 }
 
 std::set<std::string> getNextArgHint(int argc, char const* const* argv) {
@@ -228,6 +186,7 @@ std::set<std::string> getNextArgHint(int argc, char const* const* argv) {
         });
 		if (target != subC.end()) {
             argProviders.push_back(*target);
+            (*target)->setActive(true);
 		}
 	};
 
@@ -250,7 +209,6 @@ std::set<std::string> getNextArgHint(int argc, char const* const* argv) {
 	};
 
 	tokenize(argc, argv, commandCB, paramCB);
-    std::for_each(begin(argProviders), end(argProviders), [](auto* c) {c->setActive(true);});
 
 	std::set<std::string> hints;
 	if (lastArgName.empty()) {

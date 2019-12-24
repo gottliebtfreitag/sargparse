@@ -23,6 +23,8 @@ std::string generateGroffString(std::string const& program_name, std::string con
 
 std::set<std::string> getNextArgHint(int argc, char const* const* argv);
 
+std::vector<Command*> getActiveCommands();
+
 void callCommands();
 
 }
