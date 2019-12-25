@@ -60,8 +60,12 @@ struct ParameterBase {
 			_cb();
 		}
     }
+
+    std::type_info const& get_type() const {
+        return type_info;
+    }
 protected:
-	ParameterBase(std::string const& argName, DescribeFunc const& describeFunc, Callback cb, ValueHintFunc const& hintFunc, Command& command);
+	ParameterBase(std::string const& argName, DescribeFunc const& describeFunc, Callback cb, ValueHintFunc const& hintFunc, Command& command, std::type_info const& type_info);
 
 	std::string _argName;
 	DescribeFunc _describeFunc;
@@ -69,6 +73,7 @@ protected:
 	ValueHintFunc _hintFunc;
 	Command& _command;
 	bool _valSpecified {false};
+    std::type_info const& type_info;
 };
 
 template<typename T>
@@ -184,7 +189,7 @@ struct Parameter : SpeciallyTypedParameter<T> {
 	}
 };
 
-struct Flag : Parameter<bool> {
+struct Flag final : Parameter<bool> {
 	using SuperClass = Parameter<bool>;
 	using Callback = typename SuperClass::Callback;
 	Flag(std::string const& argName, std::string const& description, Callback cb=Callback{}, Command& command=getDefaultCommand())
@@ -196,8 +201,9 @@ struct Flag : Parameter<bool> {
 	}
 };
 
+
 template<typename T>
-struct Choice : TypedParameter<T> {
+struct Choice final : TypedParameter<T> {
 	using SuperClass = TypedParameter<T>;
 	using Callback   = typename SuperClass::Callback;
 private:
@@ -251,7 +257,7 @@ public:
 	}
 };
 
-struct Section {
+struct Section final {
 private:
 	std::string _name;
 
@@ -283,7 +289,7 @@ protected:
     Command& _command;
 };
 
-struct Command {
+struct Command final {
 	using DescribeFunc  = ParameterBase::DescribeFunc;
 	using ValueHintFunc = ParameterBase::ValueHintFunc;
 	using Callback      = ParameterBase::Callback;
@@ -396,7 +402,7 @@ public:
 };
 
 template<typename CB>
-struct Task : TaskBase {
+struct Task final : TaskBase {
     Task(CB&& cb, Command& command = Command::getDefaultCommand()) 
     : TaskBase{command}, _cb{std::forward<CB>(cb)} {}
     virtual ~Task() = default;
@@ -422,7 +428,7 @@ Command::Command(Command* parentCommand, std::string const& name, std::string co
 
 template<typename T>
 TypedParameter<T>::TypedParameter(T const& defaultVal, std::string const& argName, DescribeFunc const& description, Callback cb, ValueHintFunc hintFunc, Command& command)
-	: SuperClass(argName, description, cb, hintFunc, command)
+	: SuperClass(argName, description, cb, hintFunc, command, typeid(T))
 	, _val{defaultVal}
 {}
 

@@ -1,4 +1,5 @@
 #include "ArgumentParsing.h"
+#include "File.h"
 #include <algorithm>
 
 namespace sargp
@@ -174,7 +175,7 @@ std::string generateHelpString(std::regex const& filter) {
 	return helpString;
 }
 
-std::set<std::string> getNextArgHint(int argc, char const* const* argv) {
+std::string compgen(int argc, char const* const* argv) {
 	std::vector<Command*> argProviders = {&Command::getDefaultCommand()};
 	std::string lastArgName;
 	std::vector<std::string> lastArguments;
@@ -203,7 +204,8 @@ std::set<std::string> getNextArgHint(int argc, char const* const* argv) {
 			}
             try {
                 (*target)->parse(arguments);
-            } catch (sargp::parsing::detail::ParseError const& error) {
+            } catch (sargp::parsing::detail::ParseError const&) {
+            } catch (std::invalid_argument const&) {
             }
 		}
 	};
@@ -211,6 +213,9 @@ std::set<std::string> getNextArgHint(int argc, char const* const* argv) {
 	tokenize(argc, argv, commandCB, paramCB);
 
 	std::set<std::string> hints;
+    bool can_accept_file {false};
+    bool can_accept_directory {false};
+
 	if (lastArgName.empty()) {
         auto const& subC = argProviders.back()->getSubCommands();
 		for (Command const* c : subC) {
@@ -227,9 +232,20 @@ std::set<std::string> getNextArgHint(int argc, char const* const* argv) {
         if (target == params.end()) {
             continue;
         }
-        auto [cur_canAcceptNextArg, cur_hints] = (*target)->getValueHints(lastArguments);
-        canAcceptNextArg &= cur_canAcceptNextArg;
-        hints.insert(cur_hints.begin(), cur_hints.end());
+        auto useParam = [&] {
+            auto [cur_canAcceptNextArg, cur_hints] = (*target)->getValueHints(lastArguments);
+            canAcceptNextArg &= cur_canAcceptNextArg;
+            hints.insert(cur_hints.begin(), cur_hints.end());
+        };
+        if ((*target)->get_type() == typeid(File)) {
+            useParam();
+            can_accept_file = not canAcceptNextArg;
+        } else if ((*target)->get_type() == typeid(Directory)) {
+            useParam();
+            can_accept_directory = not canAcceptNextArg;
+        } else {
+            useParam();
+        }
 	}
 
 	if (canAcceptNextArg) {
@@ -241,7 +257,21 @@ std::set<std::string> getNextArgHint(int argc, char const* const* argv) {
 			}
 		}
 	}
-	return hints;
+    std::string compgen_str;
+    if (can_accept_directory) {
+        compgen_str += " -d ";
+    }
+    if (can_accept_file) {
+        compgen_str += " -f ";
+    }
+    if (not hints.empty()) {
+        compgen_str += "-W ' ";
+        compgen_str += std::accumulate(next(begin(hints)), end(hints), *begin(hints), [](std::string const& l , std::string const& r){
+            return l + " " + r;
+        });
+        compgen_str += " '";
+    }
+	return compgen_str;
 }
 
 void callCommands() {

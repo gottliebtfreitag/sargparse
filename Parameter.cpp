@@ -12,12 +12,13 @@ TaskBase::~TaskBase() {
     _command.deregisterTask(*this);
 }
 
-ParameterBase::ParameterBase(std::string const& argName, DescribeFunc const& describeFunc, Callback cb, ValueHintFunc const& hintFunc, Command& command)
-	: _argName(argName)
-	, _describeFunc(describeFunc)
-	, _cb(cb)
-	, _hintFunc(hintFunc)
-	, _command(command)
+ParameterBase::ParameterBase(std::string const& argName, DescribeFunc const& describeFunc, Callback cb, ValueHintFunc const& hintFunc, Command& command, std::type_info const& _type_info)
+	: _argName{argName}
+	, _describeFunc{describeFunc}
+	, _cb{cb}
+	, _hintFunc{hintFunc}
+	, _command{command}
+    , type_info{_type_info}
 {
 	_command.registerParameter(*this);
 }

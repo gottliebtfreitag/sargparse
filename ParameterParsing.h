@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <numeric>
 #include <optional>
+#include <filesystem>
 
 namespace sargp
 {
@@ -214,6 +215,8 @@ std::string stringify(T const& t) {
 		return t;
 	} else if constexpr (std::is_same_v<bool, T>) {
 		return t?"true":"false";
+	} else if constexpr (std::is_base_of_v<std::filesystem::path, T>) {
+		return t;
 	} else {
 		return std::to_string(t);
 	}

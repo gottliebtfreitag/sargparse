@@ -21,7 +21,7 @@ void parseArguments(int argc, char const* const* argv, std::vector<ParameterBase
 std::string generateHelpString(std::regex const& filter=std::regex{".*"});
 std::string generateGroffString(std::string const& program_name, std::string const& description, Command const& command=Command::getDefaultCommand());
 
-std::set<std::string> getNextArgHint(int argc, char const* const* argv);
+std::string compgen(int argc, char const* const* argv);
 
 std::vector<Command*> getActiveCommands();
 

@@ -82,7 +82,7 @@ void printManPage() {
         written += w;
     }
 
-    int e = ::execlp("man", "-l", absPath.data(), nullptr);
+    int e = ::execlp("man", "man", "-l", absPath.data(), nullptr);
 
     exit(e);
 }
