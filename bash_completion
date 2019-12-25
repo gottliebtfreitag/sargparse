@@ -9,7 +9,7 @@ else
     #    local IFS=$'\n'
         local LASTCHAR=' '
 
-        HINTS=( $(./test.elf ${COMP_WORDS[@]:1:${COMP_CWORD}-1} --compgen) )
+        HINTS=( $($1 ${COMP_WORDS[@]:1:${COMP_CWORD}-1} --compgen) )
         COMPREPLY=( $(eval compgen ${HINTS[@]} -- ${2}) )
 
         if [ ${HINTS} == "-d" ] || [ ${HINTS} == "-f" ]; then
