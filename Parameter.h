@@ -1,6 +1,5 @@
 #pragma once
 
-#include <regex>
 #include <map>
 #include <set>
 #include <vector>
@@ -223,7 +222,6 @@ public:
 			throw parsing::detail::ParseError("cannot interpret " + args[0] + " as a valid value for " + SuperClass::getArgName());
 		}
 		SuperClass::_val = it->second;
-		SuperClass::parse(args);
 	}
 
 	std::string stringifyValue() const override {
