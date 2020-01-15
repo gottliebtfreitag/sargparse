@@ -139,6 +139,8 @@ T parseFromString(std::string str) {
 				if (ending == "rad") {
 				} else if (ending == "deg") {
 					ret = ret / 180. * M_PI;
+				} else if (ending == "pi") {
+					ret = ret * M_PI;
 				} else if (ending == "tau") {
 					ret = ret * 2. * M_PI;
 				} else {
