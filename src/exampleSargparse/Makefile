@@ -1,0 +1,2 @@
+TYPE =
+DEPS = sargparse.a
