@@ -1,18 +1,18 @@
 #/usr/bin/env bash
 
 if [ ${#} != "1" ] || ! [ -f $1 ]; then
-     >&2 echo "usage:" ${1}
-     >&2 echo "    \$ source bash_completion [executable]"
+    if ! [ -f "${1}" ]; then
+        >&2 echo "'${1}' is not a file"
+    fi
+    >&2 echo "usage:" ${1}
+    >&2 echo "    \$ source ${0} [executable]"
 else
     function sargparse_GetOpts ()
     {
-    #    local IFS=$'\n'
-        local LASTCHAR=' '
+        mapfile -t HINTS <<< $(${COMP_LINE[0]} ${COMP_WORDS[@]:1} --bash_completion)
+        if [ "${HINTS}" == " -d " ] || [ "${HINTS}" == " -f " ]; then
+            COMPREPLY=( $(eval compgen ${HINTS[@]} -- ${2}) )
 
-        HINTS=( $($1 ${COMP_WORDS[@]:1:${COMP_CWORD}-1} --compgen) )
-        COMPREPLY=( $(eval compgen ${HINTS[@]} -- ${2}) )
-
-        if [ ${HINTS} == "-d" ] || [ ${HINTS} == "-f" ]; then
             for ((i=0; i < ${#COMPREPLY[@]}; i++)); do
                 [ -d "${COMPREPLY[$i]}" ] && COMPREPLY[$i]=${COMPREPLY[$i]}/
             done
@@ -20,10 +20,10 @@ else
             if [ ${#COMPREPLY[@]} = 1 ]; then
                 [ -f "$COMPREPLY" ] && COMPREPLY=$(printf %q%s "$COMPREPLY" " ")
             fi
-        else 
-            for ((i=0; i < ${#COMPREPLY[@]}; i++)); do
-                COMPREPLY[$i]=$(printf %q%s "${COMPREPLY[$i]}" " " )
-            done
+        else
+            HINTS=$(printf "%q:" "${HINTS[@]}")
+            local IFS=":"
+            mapfile -t COMPREPLY <<< $(compgen -W '${HINTS}' -- "${COMP_WORDS[COMP_CWORD]}")
         fi
     }
     complete -o nospace -F sargparse_GetOpts $1

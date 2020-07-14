@@ -257,17 +257,15 @@ std::string compgen(int argc, char const* const* argv) {
 	}
 	std::string compgen_str;
 	if (can_accept_directory) {
-		compgen_str += " -d ";
+		compgen_str += " -d \n";
 	}
 	if (can_accept_file) {
-		compgen_str += " -f ";
+		compgen_str += " -f \n";
 	}
 	if (not hints.empty()) {
-		compgen_str += "-W ' ";
 		compgen_str += std::accumulate(next(begin(hints)), end(hints), *begin(hints), [](std::string const& l , std::string const& r){
-			return l + " " + r;
+			return l + "\n" + r;
 		});
-		compgen_str += " '";
 	}
 	return compgen_str;
 }
