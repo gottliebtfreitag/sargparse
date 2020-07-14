@@ -49,7 +49,7 @@ int main(int argc, char** argv)
 	// create you own bash completion with this helper
 	if (std::string(argv[argc-1]) == "--bash_completion") {
 		auto hint = sargp::compgen(argc-2, argv+1);
-		std::cout << hint << " ";
+		std::cout << hint << "\n";
 		return 0;
 	}
 
