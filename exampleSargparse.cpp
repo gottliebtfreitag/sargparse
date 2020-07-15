@@ -1,4 +1,5 @@
 #include <sargparse/Parameter.h>
+#include <sargparse/File.h>
 #include <iostream>
 
 namespace {
@@ -10,6 +11,8 @@ auto myIntParam    = mySection.Parameter<int>(123, "integer", "an integer argume
 auto myDoubleParam = mySection.Parameter<double>(M_PI, "double", "a double argument");
 auto myStringParam = mySection.Parameter<std::string>("some string value", "string", "a string argument");
 auto myFlag        = mySection.Flag("flag", "a simple flag");
+auto myFile        = mySection.Parameter<sargp::File>("", "file", "a file");
+auto myDirectory   = mySection.Parameter<sargp::Directory>("", "path", "a path");
 
 void myCommandCallback();
 // if "my_command" is passed as first argument to the executable myCommandCallback will be called from sargp::callCommands()
