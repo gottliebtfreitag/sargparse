@@ -211,8 +211,6 @@ std::string compgen(int argc, char const* const* argv) {
 	tokenize(argc, argv, commandCB, paramCB);
 
 	std::set<std::string> hints;
-	bool can_accept_file {false};
-	bool can_accept_directory {false};
 
 	if (lastArgName.empty()) {
 		auto const& subC = argProviders.back()->getSubCommands();
@@ -230,20 +228,9 @@ std::string compgen(int argc, char const* const* argv) {
 		if (target == params.end()) {
 			continue;
 		}
-		auto useParam = [&] {
-			auto [cur_canAcceptNextArg, cur_hints] = (*target)->getValueHints(lastArguments);
-			canAcceptNextArg &= cur_canAcceptNextArg;
-			hints.insert(cur_hints.begin(), cur_hints.end());
-		};
-		if ((*target)->get_type() == typeid(File)) {
-			useParam();
-			can_accept_file = not canAcceptNextArg;
-		} else if ((*target)->get_type() == typeid(Directory)) {
-			useParam();
-			can_accept_directory = not canAcceptNextArg;
-		} else {
-			useParam();
-		}
+		auto [cur_canAcceptNextArg, cur_hints] = (*target)->getValueHints(lastArguments);
+		canAcceptNextArg &= cur_canAcceptNextArg;
+		hints.insert(cur_hints.begin(), cur_hints.end());
 	}
 
 	if (canAcceptNextArg) {
@@ -256,12 +243,6 @@ std::string compgen(int argc, char const* const* argv) {
 		}
 	}
 	std::string compgen_str;
-	if (can_accept_directory) {
-		compgen_str += " -d \n";
-	}
-	if (can_accept_file) {
-		compgen_str += " -f \n";
-	}
 	if (not hints.empty()) {
 		compgen_str += std::accumulate(next(begin(hints)), end(hints), *begin(hints), [](std::string const& l , std::string const& r){
 			return l + "\n" + r;

@@ -11,8 +11,15 @@ auto myIntParam    = mySection.Parameter<int>(123, "integer", "an integer argume
 auto myDoubleParam = mySection.Parameter<double>(M_PI, "double", "a double argument");
 auto myStringParam = mySection.Parameter<std::string>("some string value", "string", "a string argument");
 auto myFlag        = mySection.Flag("flag", "a simple flag");
-auto myFile        = mySection.Parameter<sargp::File>("", "file", "a file");
-auto myDirectory   = mySection.Parameter<sargp::Directory>("", "path", "a path");
+
+auto myFile        = mySection.Parameter<std::string>("", "file", "a file", []{}, sargp::completeFile());
+auto myCppFile     = mySection.Parameter<std::string>("", "cpp_file", "a .cpp file", []{}, sargp::completeFile(".cpp"));
+auto myDirectory   = mySection.Parameter<std::string>("", "path", "a path", []{}, sargp::completeDirectory());
+
+auto myMultiFile      = mySection.Parameter<std::string>("", "multi_file", "multiple files", []{}, sargp::completeFile("", sargp::File::Multi));
+auto myMultiCppFile   = mySection.Parameter<std::string>("", "multi_cpp_file", "multiple .cpp files", []{}, sargp::completeFile(".cpp", sargp::File::Multi));
+auto myMultiDirectory = mySection.Parameter<std::string>("", "multi_path", "multiple paths", []{}, sargp::completeDirectory(sargp::File::Multi));
+
 
 void myCommandCallback();
 // if "my_command" is passed as first argument to the executable myCommandCallback will be called from sargp::callCommands()
