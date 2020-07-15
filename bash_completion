@@ -9,9 +9,13 @@ if [ ${#} != "1" ] || ! [ -f $1 ]; then
 else
     function sargparse_GetOpts ()
     {
-        mapfile -t HINTS <<< $(${COMP_LINE[0]} ${COMP_WORDS[@]:1} --bash_completion)
-        if [ "${HINTS}" == " -d " ] || [ "${HINTS}" == " -f " ]; then
-            COMPREPLY=( $(eval compgen ${HINTS[@]} -- ${2}) )
+        mapfile -t HINTS <<< $(${COMP_LINE[0]} "${COMP_WORDS[@]:1}" --bash_completion)
+        if [[ "${HINTS}" =~ " -d " ]] || [[ "${HINTS}" =~ " -f " ]]; then
+#            local IFS=$'\r'
+            COMPREPLY=()
+            for ((i=0; i < ${#HINTS[@]}; i++)); do
+	            COMPREPLY+=( $(compgen ${HINTS[i]} -- ${2}) )
+            done
 
             for ((i=0; i < ${#COMPREPLY[@]}; i++)); do
                 [ -d "${COMPREPLY[$i]}" ] && COMPREPLY[$i]=${COMPREPLY[$i]}/
