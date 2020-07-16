@@ -1,13 +1,4 @@
-# sargparse
-A very easy to use argument parser
-
-sargparse is intended to be used in very modular software where parameters can reside all over the source files
-
-Here is a small yet extensive example about its usage:
-
-File foo.cpp:
-~~~
-#include <sargparse/Parameter.h>
+#include <sargparse/File.h>
 #include <iostream>
 
 namespace {
@@ -19,6 +10,15 @@ auto myIntParam    = mySection.Parameter<int>(123, "integer", "an integer argume
 auto myDoubleParam = mySection.Parameter<double>(M_PI, "double", "a double argument");
 auto myStringParam = mySection.Parameter<std::string>("some string value", "string", "a string argument");
 auto myFlag        = mySection.Flag("flag", "a simple flag");
+
+auto myFile        = mySection.Parameter<std::string>("", "file", "a file", []{}, sargp::completeFile());
+auto myCppFile     = mySection.Parameter<std::string>("", "cpp_file", "a .cpp file", []{}, sargp::completeFile(".cpp"));
+auto myDirectory   = mySection.Parameter<std::string>("", "path", "a path", []{}, sargp::completeDirectory());
+
+auto myMultiFiles       = mySection.Parameter<std::vector<std::string>>({}, "multi_files", "multiple files", []{}, sargp::completeFile("", sargp::File::Multi));
+auto myMultiCppFiles    = mySection.Parameter<std::vector<std::string>>({}, "multi_cpp_files", "multiple .cpp files", []{}, sargp::completeFile(".cpp", sargp::File::Multi));
+auto myMultiDirectories = mySection.Parameter<std::vector<std::string>>({}, "multi_paths", "multiple paths", []{}, sargp::completeDirectory(sargp::File::Multi));
+
 
 void myCommandCallback();
 // if "my_command" is passed as first argument to the executable myCommandCallback will be called from sargp::callCommands()
@@ -44,10 +44,7 @@ auto myChoice = sargp::Choice<MyEnumType>{MyEnumType::Foo, "my_enum",
 	{{"Foo", MyEnumType::Foo}, {"Bar", MyEnumType::Bar}}, "a choice demonstration"
 };
 }
-~~~
 
-file main.cpp:
-~~~
 #include <sargparse/ArgumentParsing.h>
 #include <sargparse/Parameter.h>
 #include <iostream>
