@@ -13,7 +13,7 @@ else
 		globalCommands=$(echo ${globalParams} | grep "^[^-][^-]")
 		globalOptions=$(echo ${globalParams} | grep "^--")
 
-		localParams=$(${PROG} ${words[@]:1} --bash_completion)
+		localParams=$(${PROG} ${(@q)words[@]:1} --bash_completion)
 		localCommands=$(echo ${localParams} | grep "^[^-][^-]")
 		localOptions=$(echo ${localParams} | grep "^--")
 		localSpecialOptions=$(echo ${localParams} | grep "^ -")
@@ -30,6 +30,9 @@ else
 			_files -/
 		elif [ "${localSpecialOptions}" = " -f " ]; then
 			_files
+		elif [[ "${localSpecialOptions}" =~ " -f " ]]; then
+			EXT="$(echo "${localSpecialOptions}" | cut -d ' ' -f 3)"
+			_files -g "*${EXT}"
 		else
 			compadd -J "G4" -X "%USuggestions%u" -- ${localCommands[@]}
 			compadd -J "G3" -X "%ULocal Options%u" -- ${localOptions[@]}
