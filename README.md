@@ -7,7 +7,7 @@ Here is a small yet extensive example about its usage:
 
 File foo.cpp:
 ~~~
-#include <sargparse/Parameter.h>
+#include <sargparse/sargparse.h>
 #include <iostream>
 
 namespace {
@@ -49,7 +49,7 @@ auto myChoice = sargp::Choice<MyEnumType>{MyEnumType::Foo, "my_enum",
 file main.cpp:
 ~~~
 #include <sargparse/ArgumentParsing.h>
-#include <sargparse/Parameter.h>
+#include <sargparse/sargparse.h>
 #include <iostream>
 
 namespace {
