@@ -421,7 +421,7 @@ Command::Command(Command* parentCommand, std::string const& name, std::string co
 	, _description(description)
 	, _tasks{}
 	, _defaultTask{std::make_unique<Task<CB>>(std::forward<CB>(cb), *this)}
-	, _parentCommand{parentCommand?:&Command::getDefaultCommand()}
+	, _parentCommand{parentCommand?nullptr:&Command::getDefaultCommand()}
 {
 	_parentCommand->subcommands.emplace_back(this);
 }

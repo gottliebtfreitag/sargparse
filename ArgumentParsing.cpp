@@ -63,7 +63,7 @@ void parseArguments(int argc, char const* const* argv) {
 			return cmd->getName() == commandName;
 		});
 		if (target == subC.end()) {
-			throw std::invalid_argument("command " + commandName + " is not implemented");
+			throw std::invalid_argument("command '" + commandName + "' is not implemented");
 		}
 		(*target)->setActive(true);
 		argProviders.push_back(*target);
