@@ -1,4 +1,4 @@
-#include <sargparse/File.h>
+#include <sargparse/sargparse.h>
 #include <iostream>
 
 namespace {
@@ -46,7 +46,7 @@ auto myChoice = sargp::Choice<MyEnumType>{MyEnumType::Foo, "my_enum",
 }
 
 #include <sargparse/ArgumentParsing.h>
-#include <sargparse/Parameter.h>
+#include <sargparse/sargparse.h>
 #include <iostream>
 
 namespace {
