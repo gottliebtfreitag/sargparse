@@ -236,9 +236,12 @@ public:
 		if (SuperClass::_hintFunc) {
 			return SuperClass::_hintFunc(args);
 		}
+		if (args.size() != 1) {
+			return {true, {}};
+		}
 		std::set<std::string> names;
 		for (auto const& n2v : _name2ValMap) { names.emplace(n2v.first); };
-		return std::make_pair<bool, std::set<std::string>>(args.size() == 1, std::move(names));
+		return std::make_pair<bool, std::set<std::string>>(false , std::move(names));
 	}
 
 	std::string describe() const override {

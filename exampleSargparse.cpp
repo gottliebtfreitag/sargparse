@@ -1,4 +1,3 @@
-#include <sargparse/Parameter.h>
 #include <sargparse/File.h>
 #include <iostream>
 
@@ -16,9 +15,9 @@ auto myFile        = mySection.Parameter<std::string>("", "file", "a file", []{}
 auto myCppFile     = mySection.Parameter<std::string>("", "cpp_file", "a .cpp file", []{}, sargp::completeFile(".cpp"));
 auto myDirectory   = mySection.Parameter<std::string>("", "path", "a path", []{}, sargp::completeDirectory());
 
-auto myMultiFile      = mySection.Parameter<std::string>("", "multi_file", "multiple files", []{}, sargp::completeFile("", sargp::File::Multi));
-auto myMultiCppFile   = mySection.Parameter<std::string>("", "multi_cpp_file", "multiple .cpp files", []{}, sargp::completeFile(".cpp", sargp::File::Multi));
-auto myMultiDirectory = mySection.Parameter<std::string>("", "multi_path", "multiple paths", []{}, sargp::completeDirectory(sargp::File::Multi));
+auto myMultiFiles       = mySection.Parameter<std::vector<std::string>>({}, "multi_files", "multiple files", []{}, sargp::completeFile("", sargp::File::Multi));
+auto myMultiCppFiles    = mySection.Parameter<std::vector<std::string>>({}, "multi_cpp_files", "multiple .cpp files", []{}, sargp::completeFile(".cpp", sargp::File::Multi));
+auto myMultiDirectories = mySection.Parameter<std::vector<std::string>>({}, "multi_paths", "multiple paths", []{}, sargp::completeDirectory(sargp::File::Multi));
 
 
 void myCommandCallback();
