@@ -1,5 +1,5 @@
 all:
-	g++ -std=c++17 exampleSargparse.cpp sargparse/*.cpp -o exampleSargparse -isystem .
+	g++ -std=c++17 *.cpp sargparse/*.cpp -o exampleSargparse -isystem .
 	@echo "try:"
 	@echo "$$ ./exampleSargparse --help"
 	@echo "$$ ./exampleSargparse --man"
