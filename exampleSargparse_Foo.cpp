@@ -20,11 +20,13 @@ auto myMultiCppFiles    = mySection.Parameter<std::vector<std::string>>({}, "mul
 auto myMultiDirectories = mySection.Parameter<std::vector<std::string>>({}, "multi_paths", "multiple paths", []{}, sargp::completeDirectory(sargp::File::Multi));
 
 
+
 void myCommandCallback();
 // if "my_command" is passed as first argument to the executable myCommandCallback will be called from sargp::callCommands()
 auto myCommand = sargp::Command{"my_command", "help text for that command", myCommandCallback};
 auto myCommandSpecificParameter = myCommand.Flag("print_hello", "print hello");
 auto myTextToPrint = myCommand.Parameter<std::vector<std::string>>({"some", "words"}, "words_to_print", "print some words");
+
 void myCommandCallback() {
 	std::cout << "executing \"my_command\"" << std::endl;
 	if (myCommandSpecificParameter) {
