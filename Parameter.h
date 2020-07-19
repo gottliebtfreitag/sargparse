@@ -38,7 +38,7 @@ struct ParameterBase {
 		if (_hintFunc) {
 			return _hintFunc(args);
 		}
-		return std::make_pair<bool, std::set<std::string>>(not args.empty(), {});
+		return std::make_pair<bool, std::set<std::string>>(args.size() > 1, {});
 	}
 
 	auto getArgName() const -> std::string const& {
