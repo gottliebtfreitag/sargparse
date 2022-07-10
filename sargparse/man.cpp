@@ -1,12 +1,13 @@
 #include "ArgumentParsing.h"
 #include "Parameter.h"
 
+#include <array>
 #include <csignal>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
-#include <stdlib.h>
 #include <string>
 #include <unistd.h>
-#include <array>
 
 namespace sargp {
 
