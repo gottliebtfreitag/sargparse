@@ -6,8 +6,8 @@
 [subrepo]
 	remote = .
 	branch = master
-	commit = d246c5ec3867e68f0c7d85a72539d518ea45d91a
-	parent = 44f4e12e65a28b21e476a68d80f1cc1db1faa13c
+	commit = 231697decf827e7afe6c151db9bdfa269d129213
+	parent = 1ee1d4a418d68acd20c256a1feebd5256dc3cdde
 	method = merge
 	update = auto
 	cmdver = 0.4.3
