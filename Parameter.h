@@ -283,12 +283,17 @@ public:
 	}
 };
 
-struct TaskBase {
-	TaskBase(Command& c);
-	virtual ~TaskBase();
-	virtual void operator()() = 0;
+struct Task {
+	template<typename CB>
+	Task(CB&& cb, Command& command = getDefaultCommand());
 
-protected:
+	~Task();
+
+	void operator()() {
+		return _cb();
+	}
+private:
+	std::function<void()> _cb;
 	Command& _command;
 };
 
@@ -300,8 +305,8 @@ struct Command final {
 private:
 	std::string               _name;
 	std::string               _description;
-	std::vector<TaskBase*>    _tasks;
-	std::unique_ptr<TaskBase> _defaultTask;
+	std::vector<Task*>        _tasks;
+	std::unique_ptr<Task>     _defaultTask;
 	bool                      _isActive {false};
 
 	std::vector<ParameterBase*> parameters;
@@ -354,10 +359,10 @@ public:
 		parameters.erase(std::remove(begin(parameters), end(parameters), &parameter), end(parameters));
 	}
 
-	void registerTask(TaskBase& task) {
+	void registerTask(Task& task) {
 		_tasks.emplace_back(&task);
 	}
-	void deregisterTask(TaskBase& task) {
+	void deregisterTask(Task& task) {
 		_tasks.erase(std::remove(begin(_tasks), end(_tasks), &task), end(_tasks));
 	}
 
@@ -411,25 +416,18 @@ public:
 };
 
 template<typename CB>
-struct Task final : TaskBase {
-	Task(CB&& cb, Command& command = Command::getDefaultCommand())
-	: TaskBase{command}, _cb{std::forward<CB>(cb)} {}
-	virtual ~Task() = default;
+Task::Task(CB&& cb, Command& command)
+: _cb{std::forward<CB>(cb)}, _command{command}  {
+	_command.registerTask(*this);
+}
 
-	void operator()() override {
-		return _cb();
-	}
-private:
-	CB _cb;
-};
-template<typename CB> Task(CB) -> Task<CB>;
 
 template<typename CB>
 Command::Command(Command* parentCommand, std::string const& name, std::string const& description, CB&& cb) 
 	: _name(name)
 	, _description(description)
 	, _tasks{}
-	, _defaultTask{std::make_unique<Task<CB>>(std::forward<CB>(cb), *this)}
+	, _defaultTask{std::make_unique<Task>(std::forward<CB>(cb), *this)}
 	, _parentCommand{parentCommand?nullptr:&Command::getDefaultCommand()}
 {
 	_parentCommand->subcommands.emplace_back(this);

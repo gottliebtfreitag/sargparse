@@ -4,10 +4,7 @@
 
 namespace sargp {
 
-TaskBase::TaskBase(Command& c) : _command{c} {
-	_command.registerTask(*this);
-}
-TaskBase::~TaskBase() {
+Task::~Task() {
 	_command.deregisterTask(*this);
 }
 
